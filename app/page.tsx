@@ -1,101 +1,194 @@
-import Image from "next/image";
+"use client";
+import React, { useState, useEffect } from "react";
+import axios from "axios";
+import Spline from "@splinetool/react-spline";
+import { franc } from "franc";
 
-export default function Home() {
-  return (
-    <div className="grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20 font-[family-name:var(--font-geist-sans)]">
-      <main className="flex flex-col gap-8 row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="list-inside list-decimal text-sm text-center sm:text-left font-[family-name:var(--font-geist-mono)]">
-          <li className="mb-2">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] px-1 py-0.5 rounded font-semibold">
-              app/page.tsx
-            </code>
-            .
-          </li>
-          <li>Save and see your changes instantly.</li>
-        </ol>
+const LandQueryAssistant = () => {
+    const [query, setQuery] = useState("");
+    const [response, setResponse] = useState("");
+    const [isListening, setIsListening] = useState(false);
+    const [voices, setVoices] = useState<any[]>([]);
+    const [selectedLanguage, setSelectedLanguage] = useState("en");
+    const [audioUrl, setAudioUrl] = useState<string | null>(null);
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:min-w-44"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
+    // Load available voices
+    useEffect(() => {
+        const loadVoices = () => {
+            const availableVoices = window.speechSynthesis.getVoices();
+            setVoices(availableVoices);
+        };
+
+        if (window.speechSynthesis.onvoiceschanged !== undefined) {
+            window.speechSynthesis.onvoiceschanged = loadVoices;
+        }
+
+        loadVoices();
+    }, []);
+
+    const handleAsk = async () => {
+        try {
+            console.log("Sending request:", query);
+            // const res = await axios.post("http://127.0.0.1:8000/ask", 
+            const res = await axios.post("https://chatbotapi-pkrw.onrender.com/ask", 
+
+
+                { 
+                    query,
+                    language: selectedLanguage
+                },
+                {
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json',
+                    },
+                    withCredentials: true
+                }
+            );
+            console.log("Response received:", res.data);
+            setResponse(res.data.response);
+            
+            // Play audio if available
+            if (res.data.audio_url) {
+                // const audio = new Audio(`http://127.0.0.1:8000${res.data.audio_url}`);
+                const audio = new Audio(`https://chatbotapi-pkrw.onrender.com${res.data.audio_url}`);
+
+                audio.play();
+            }
+        } catch (error) {
+            console.error("Error details:", error);
+            setResponse(`Error: Please check console for details.`);
+        }
+    };
+
+    const startListening = () => {
+        if (!("webkitSpeechRecognition" in window)) {
+            alert("Speech Recognition is not supported in this browser.");
+            return;
+        }
+
+        const recognition = new (window as any).webkitSpeechRecognition();
+        recognition.continuous = false;
+        
+        // Use selected language instead of detecting
+        switch(selectedLanguage) {
+            case "mr":
+                recognition.lang = "mr-IN";
+                break;
+            case "hi":
+                recognition.lang = "hi-IN";
+                break;
+            default:
+                recognition.lang = "en-US";
+        }
+
+        recognition.onstart = () => setIsListening(true);
+
+        recognition.onresult = (event: any) => {
+            const transcript = event.results[0][0].transcript;
+            console.log("Recognized Speech:", transcript);
+            setQuery(transcript);
+            setIsListening(false);
+        };
+
+        recognition.onerror = (event: any) => {
+            console.error("Speech recognition error:", event.error);
+            setIsListening(false);
+        };
+
+        recognition.onend = () => setIsListening(false);
+
+        recognition.start();
+    };
+
+    // Get language-specific labels
+    const getLabels = () => {
+        switch(selectedLanguage) {
+            case "mr":
+                return {
+                    title: "जमिनीच्या विचारपूस सहाय्यक",
+                    placeholder: "तुमचा प्रश्न लिहा...",
+                    ask: "विचारपूस करा",
+                    speak: "बोलणे सुरू करा",
+                    listening: "ऐकतो आहे...",
+                    response: "प्रतिसाद:"
+                };
+            case "hi":
+                return {
+                    title: "भूमि प्रश्न सहायक",
+                    placeholder: "अपना प्रश्न लिखें...",
+                    ask: "पूछें",
+                    speak: "बोलें",
+                    listening: "सुन रहा हूं...",
+                    response: "जवाब:"
+                };
+            default:
+                return {
+                    title: "Land Query Assistant",
+                    placeholder: "Enter your query...",
+                    ask: "Ask",
+                    speak: "Speak",
+                    listening: "Listening...",
+                    response: "Response:"
+                };
+        }
+    };
+
+    const labels = getLabels();
+
+    return (
+        <div className="relative text-center h-screen flex flex-col justify-center items-center">
+            {/* Background Spline Model */}
+            <div className="fixed top-0 left-0 w-full h-full -z-10">
+                <Spline
+                    scene="https://prod.spline.design/atstHpj9yxuHGed0/scene.splinecode"
+                />
+            </div>
+
+            {/* Language Selection */}
+            <div className="relative z-20 mb-4">
+                <select 
+                    value={selectedLanguage}
+                    onChange={(e) => setSelectedLanguage(e.target.value)}
+                    className="px-4 py-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 text-black"
+                >
+                    <option value="en">English</option>
+                    <option value="hi">हिंदी</option>
+                    <option value="mr">मराठी</option>
+                </select>
+            </div>
+
+            {/* Query Input and Buttons */}
+            <div className="relative z-20 mt-40">
+                <h2 className="text-2xl font-bold mb-4">{labels.title}</h2>
+                <input
+                    type="text"
+                    value={query}
+                    onChange={(e) => setQuery(e.target.value)}
+                    placeholder={labels.placeholder}
+                    className="px-4 py-2 w-72 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 text-black"
+                />
+                <button
+                    onClick={handleAsk}
+                    className="ml-2 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                    {labels.ask}
+                </button>
+                <button
+                    onClick={startListening}
+                    className="ml-2 px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 focus:outline-none focus:ring-2 focus:ring-green-500"
+                >
+                    🎤 {isListening ? labels.listening : labels.speak}
+                </button>
+            </div>
+
+            {/* Response Box */}
+            <div className="relative z-20 mt-8 w-1/2 p-6 bg-white bg-opacity-90 backdrop-blur-md rounded-lg border border-gray-200 text-black">
+                <strong>{labels.response}</strong>
+                <p className="mt-2">{response}</p>
+            </div>
         </div>
-      </main>
-      <footer className="row-start-3 flex gap-6 flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
-    </div>
-  );
-}
+    );
+};
+
+export default LandQueryAssistant;
